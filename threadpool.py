@@ -15,4 +15,3 @@ for i in range(1,50):
 #pool.join()
 #time.sleep(10)      由于apply_async是异步的,所以需要等到子线程退出完再退出主线程才能保证所有子线程全部执行完毕, 也使用apply同步执行。
 #print async_result.get()
-
