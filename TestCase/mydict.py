@@ -1,4 +1,8 @@
 # -*-coding:utf-8-*-
+import sys
+sys.path.append('..')  
+                 
+from lib.log import logging,sys
 
 class Dict(dict):
     #这里的dict是pyton的内建class, super之后Dict就具备了dict的能力
@@ -15,5 +19,6 @@ class Dict(dict):
         self[key] = vaule
 
 if __name__ == '__main__':
-    print(len(dir(dict)))
-    print(len(dir(Dict)))
+    logging.info((len(dir(dict))))
+    logging.info((len(dir(Dict))))
+    logging.debug(sys.path)
