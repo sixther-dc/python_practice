@@ -145,3 +145,29 @@ function mapDispatchToProps(dispatch, ownProps) {
 }
 
 export default connect(mapStateToProps, mapDispatchToProps)(CounterView);
+
+
+
+let umdConfig = Object.assign({}, getCommonConfig(), {
+    entry: entrys,
+    output: {
+        path: `${helpers.packageBuildPath}/main`,
+        filename: '[name].js',
+        libraryTarget: 'umd',
+        library: '[name]',
+        umdNamedDefine: true,
+        chunkFilename: '[name].js'
+    },
+});
+
+let globalConfig = Object.assign({}, getCommonConfig(), {
+    entry: entrys,
+    output: {
+        path: `${helpers.packageBuildPath}/main`,
+        filename: 'g[name].js',
+        libraryTarget: 'window',
+        // library: '[name]',
+        // umdNamedDefine: true,
+        chunkFilename: 'g[name].js'
+    },
+});
