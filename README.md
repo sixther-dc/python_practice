@@ -1,6 +1,9 @@
 import React from 'react';
-import { Subject } from 'rxjs';
+import { Subject, BehaviorSubject } from 'rxjs';
 import { scan, map } from 'rxjs/operators';
+
+import {connect} from 'react-redux';
+import * as Actions from './Action';
 
 //只负责显示
 // const CounterView = ({count, onIncrement, onDecrement}) => {
@@ -15,8 +18,7 @@ import { scan, map } from 'rxjs/operators';
 
 class CounterView extends React.Component {
     constructor() {
-        super(...arguments);
-        console.log('init counter view')
+        super(...arguments)
     }
     render() {
         return(
@@ -79,36 +81,67 @@ class CounterView extends React.Component {
 // }
 
 //高阶组件， 生成组件的组件
-const observe = (WrappedComponent, observableFactory, defaultState) => {
-    return class extends React.Component {
-        constructor() {
-            super(...arguments);
-            this.state = defaultState;
-            this.props$ = observableFactory(this.props, this.state);
-            this.subscription = this.props$.subscribe(value => this.setState(value));
-        }
+//TODO:一种模式，其他组件如果使用了rxjs都可是使用这种模式
+// const observe = (WrappedComponent, observableFactory, defaultState) => {
+//     return class extends React.Component {
+//         constructor() {
+//             super(...arguments);
+//             this.state = {count: defaultState};
+//             this.props$ = observableFactory(this.props, this.state);
+//         }
 
-        render() {
-            return <WrappedComponent {...this.props} {...this.state} />
-        }
-        componentWillUnmount() {
-            this.subscription.unsubscribe();
-        }
+//         render() {
+//             console.log('tttt');
+//             return <WrappedComponent {...this.state}/>
+//         }
+//         componentWillUnmount() {
+//             this.subscription.unsubscribe();
+//         }
+//         //没有mount之前不能setState, 因为ui还都没有
+//         componentDidMount() {
+//             this.subscription = this.props$.subscribe(value => {
+//                 this.setState(value);
+//             });
+//             this.props$.next(0);
+//         }
+//     }
+// }
+
+// export default observe(
+//     CounterView,
+//     () => {
+//         //BehaviorSubject每次都能拿到最新的数据
+//         // const counter = new BehaviorSubject(0);
+//         //Subject需要先subscribe, 然后执行next才能获取到数据;
+//         const counter = new Subject();
+//         return counter.pipe(
+//             scan((result, inc) => result + inc, 0),
+//             map( value => ({
+//                 count: value,
+//                 onIncrement: () => counter.next(1),
+//                 onDecrement: () => counter.next(-1)
+//             }))
+//         )
+//     },
+//     0
+// )
+
+//TODO: 使用redux实现计数器
+//createstore返回一个拥有dispatch, getState, subscribe三个属性的对象
+//引发渲染
+function mapStateToProps(state, ownProps) {
+    return {
+        count: state.count
+    }
+};
+
+
+//引发改变
+function mapDispatchToProps(dispatch, ownProps) {
+    return {
+        onIncrement: () => dispatch(Actions.increment()),
+        onDecrement: () => dispatch(Actions.decrement())
     }
 }
 
-export default observe(
-    CounterView,
-    () => {
-        const counter = new Subject();
-        return counter.pipe(
-            scan((result, inc) => result + inc, 0),
-            map( value => ({
-                count: value,
-                onIncrement: () => counter.next(1),
-                onDecrement: () => counter.next(-1)
-            }))
-        )
-    },
-    0
-)
+export default connect(mapStateToProps, mapDispatchToProps)(CounterView);
