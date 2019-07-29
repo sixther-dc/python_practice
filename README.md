@@ -1,150 +1,100 @@
-import React from 'react';
-import { Subject, BehaviorSubject } from 'rxjs';
-import { scan, map } from 'rxjs/operators';
+/* global Rx */
+const stage = document.getElementById("stage");
+const context = stage.getContext('2d');
+context.fillStyle = "green";
 
-import {connect} from 'react-redux';
-import * as Actions from './Action';
+const PADDLE_WIDTH = 100;
+const PADDLE_HEIGHT = 20;
+const BALL_RADIUS = 10;
+const BRICK_ROWS = 5;
+const BRICK_COLUMNS = 7;
+const BRICK_HEIGHT  = 20;
+const BRICK_GAP  = 3;
 
-//只负责显示
-// const CounterView = ({count, onIncrement, onDecrement}) => {
-//     return(
-//         <div>
-//             <h1>Count: {count}</h1>
-//             <button onClick={onIncrement}>+</button>
-//             <button onClick={onDecrement}>-</button>
-//         </div>
-//     )
-// };
-
-class CounterView extends React.Component {
-    constructor() {
-        super(...arguments)
-    }
-    render() {
-        return(
-            <div>
-                <h1>Count: {this.props.count}</h1>
-                <button onClick={this.props.onIncrement}>+</button>
-                <button onClick={this.props.onDecrement}>-</button>
-            </div>
-        )
-    }
+//显示游戏说明
+function drawIntro() {
+    context.clearRect(0, 0, stage.width, stage.height);
+    context.textAlign = "center";
+    context.font = '24px Courier New';
+    context.fillText("Press [<] and [>]", stage.width / 2, stage.height / 2);
 }
 
-//真正处理数据逻辑
-// export default class Counter extends React.Component {
-//     state = {count: 0};
-//     onDecrement()  {
-//         this.setState({count: this.state.count - 1});
-//     };
-//     onIncrement() {
-//         console.log(this.state);
-//         this.setState({count: this.state.count + 1});
-//     };
-//     render() {
-//         //bind{this} 是绑定到类实例化之后的实例this上
-//         return(
-//             <CounterView
-//                 count = {this.state.count}
-//                 onDecrement = {this.onDecrement.bind(this)}
-//                 onIncrement = {this.onIncrement.bind(this)}
-//             />
-//         )
-//     }
-// }
 
-// export default class Counter extends React.Component {
-//     constructor() {
-//         super(...arguments);
-//         this.state = {count: 0};
-//         this.counter = new Subject();
-//         this.counter.pipe(
-//             scan((result, inc) => result + inc, 0)
-//         ).subscribe(
-//             value => {
-//                 this.setState({count: value})
-//                 console.log(value);
-//             }
-//         )
-//     };
-//     //Maximum update depth exceeded. 如果onDecrement直接写语句（非函数）时会出现这个报错， 只要调用了setState方法，就会重新调用render方法，然后就会一直执行下去
-//     render() {
-//         console.log("render function of Counter component invoked.")
-//         return(
-//             <CounterView
-//                 count = {this.state.count}
-//                 onDecrement = {() => this.counter.next(1)}
-//                 onIncrement = {() => this.counter.next(-1)}
-//             />
-//         )
-//     }
-// }
-
-//高阶组件， 生成组件的组件
-//TODO:一种模式，其他组件如果使用了rxjs都可是使用这种模式
-// const observe = (WrappedComponent, observableFactory, defaultState) => {
-//     return class extends React.Component {
-//         constructor() {
-//             super(...arguments);
-//             this.state = {count: defaultState};
-//             this.props$ = observableFactory(this.props, this.state);
-//         }
-
-//         render() {
-//             console.log('tttt');
-//             return <WrappedComponent {...this.state}/>
-//         }
-//         componentWillUnmount() {
-//             this.subscription.unsubscribe();
-//         }
-//         //没有mount之前不能setState, 因为ui还都没有
-//         componentDidMount() {
-//             this.subscription = this.props$.subscribe(value => {
-//                 this.setState(value);
-//             });
-//             this.props$.next(0);
-//         }
-//     }
-// }
-
-// export default observe(
-//     CounterView,
-//     () => {
-//         //BehaviorSubject每次都能拿到最新的数据
-//         // const counter = new BehaviorSubject(0);
-//         //Subject需要先subscribe, 然后执行next才能获取到数据;
-//         const counter = new Subject();
-//         return counter.pipe(
-//             scan((result, inc) => result + inc, 0),
-//             map( value => ({
-//                 count: value,
-//                 onIncrement: () => counter.next(1),
-//                 onDecrement: () => counter.next(-1)
-//             }))
-//         )
-//     },
-//     0
-// )
-
-//TODO: 使用redux实现计数器
-//createstore返回一个拥有dispatch, getState, subscribe三个属性的对象
-//引发渲染
-function mapStateToProps(state, ownProps) {
-    return {
-        count: state.count
-    }
-};
-
-
-//引发改变
-function mapDispatchToProps(dispatch, ownProps) {
-    return {
-        onIncrement: () => dispatch(Actions.increment()),
-        onDecrement: () => dispatch(Actions.decrement())
-    }
+//绘制球拍
+function drawPaddle(position) {
+    context.beginPath();
+    context.rect(
+        position - PADDLE_WIDTH / 2,
+        stage.height - PADDLE_HEIGHT,
+        PADDLE_WIDTH,
+        PADDLE_HEIGHT
+    );
+    context.fill();
+    context.closePath();
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(CounterView);
+function drawBall(ball) {
+    context.beginPath();
+    context.arc(ball.position.x, ball.position.y, BALL_RADIUS, 0, Math.PI * 2);
+    context.fill();
+    context.closePath();
+}
+
+const PADDLE_SPEED = 240;
+const PADDLE_POSATION = stage.width / 2;
+let nextPaddlePosation = PADDLE_POSATION;
+drawPaddle(PADDLE_POSATION)
+const time$ = Rx.Observable
+     //保持60hz的刷新率
+    .interval(1000 / 60, Rx.Scheduler.requestAnimationFrame)
+    .map(() => ({
+        time: Date.now(),
+        deltaTime: null 
+    }))
+    .scan((previous, current) => ({
+        time: current.time,
+        deltaTime: (current.time - previous.time) / 1000
+    }))
+    // .subscribe((value) => {
+    //     nextPaddlePosation = nextPaddlePosation + value.deltaTime * PADDLE_SPEED;
+    //     // context.clearRect(0, 0, stage.width, stage.height);
+    //     // drawPaddle(nextPaddlePosation);
+    // })
+
+
+const PADDLE_CONTROLS = {
+    'ArrowLeft': -1,
+    'ArrowRight': 1
+}
+const keys$ = Rx.Observable
+                .merge(
+                    Rx.Observable.fromEvent(document, 'keydown').map(event => ( PADDLE_CONTROLS[event.key] || 0 )),
+                    //释放按键
+                    Rx.Observable.fromEvent(document, 'keyup').map(event => (0))
+                )
+                //对数据去重
+                .distinctUntilChanged();
+
+//结合时间流以及鼠标时间来控制球拍的位置
+time$.withLatestFrom(keys$).subscribe(value => {
+    nextPaddlePosation = nextPaddlePosation + value[0].deltaTime * PADDLE_SPEED * value[1];
+    context.clearRect(0, 0, stage.width, stage.height);
+    drawPaddle(nextPaddlePosation);
+    drawBall(initState().ball);
+});
+
+
+const initState = () => ({
+    ball: {
+        position : {
+            x: stage.width / 2,
+            y: stage.height - PADDLE_HEIGHT - BALL_RADIUS
+        }
+    }
+})
+
+
+// drawBall(initState().ball)
 
 
 
