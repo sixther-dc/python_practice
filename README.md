@@ -8,8 +8,32 @@ const PADDLE_HEIGHT = 20;
 const BALL_RADIUS = 10;
 const BRICK_ROWS = 5;
 const BRICK_COLUMNS = 7;
-const BRICK_HEIGHT  = 20;
-const BRICK_GAP  = 3;
+const BRICK_HEIGHT = 20;
+const BRICK_GAP = 3;
+//球拍的移动速速
+const PADDLE_SPEED = 240;
+const BALL_SPEED = 100;
+const PADDLE_CONTROLS = {
+    'ArrowLeft': -1,
+    'ArrowRight': 1
+}
+
+const initState = {
+    ball: {
+        position: {
+            x: stage.width / 2,
+            y: stage.height - PADDLE_HEIGHT - BALL_RADIUS
+        },
+        direction: {
+            x: 1,
+            y: -1
+        }
+    },
+    paddle: {
+        position: stage.width / 2
+    },
+    bricks: createBricks()
+}
 
 //显示游戏说明
 function drawIntro() {
@@ -33,6 +57,40 @@ function drawPaddle(position) {
     context.closePath();
 }
 
+function createBricks() {
+    let width = (stage.width - BRICK_GAP * (BRICK_COLUMNS + 1)) / BRICK_COLUMNS;
+    let bricks = [];
+    for (i = 0; i < BRICK_ROWS; i++) {
+        for (j = 0; j < BRICK_COLUMNS; j++) {
+            bricks.push({
+                x: BRICK_GAP * (j + 1) + j * width,
+                y: BRICK_GAP * (i + 1) + i * BRICK_HEIGHT,
+                width: width,
+                height: BRICK_HEIGHT
+            })
+        }
+    }
+    return bricks;
+}
+
+function drawDrick(brick) {
+    context.beginPath();
+    context.rect(
+        brick.x,
+        brick.y,
+        brick.width,
+        brick.height
+    );
+    context.fill();
+    context.closePath();
+}
+
+function drawDricks(bricks) {
+    bricks.forEach(brick => {
+        drawDrick(brick)
+    })
+}
+
 function drawBall(ball) {
     context.beginPath();
     context.arc(ball.position.x, ball.position.y, BALL_RADIUS, 0, Math.PI * 2);
@@ -40,62 +98,76 @@ function drawBall(ball) {
     context.closePath();
 }
 
-const PADDLE_SPEED = 240;
-const PADDLE_POSATION = stage.width / 2;
-let nextPaddlePosation = PADDLE_POSATION;
-drawPaddle(PADDLE_POSATION)
+let nextPaddlePosation = initState.paddle.position;
+
 const time$ = Rx.Observable
-     //保持60hz的刷新率
+    //保持60hz的刷新率
     .interval(1000 / 60, Rx.Scheduler.requestAnimationFrame)
     .map(() => ({
         time: Date.now(),
-        deltaTime: null 
+        deltaTime: null
     }))
     .scan((previous, current) => ({
         time: current.time,
         deltaTime: (current.time - previous.time) / 1000
     }))
-    // .subscribe((value) => {
-    //     nextPaddlePosation = nextPaddlePosation + value.deltaTime * PADDLE_SPEED;
-    //     // context.clearRect(0, 0, stage.width, stage.height);
-    //     // drawPaddle(nextPaddlePosation);
-    // })
 
-
-const PADDLE_CONTROLS = {
-    'ArrowLeft': -1,
-    'ArrowRight': 1
-}
 const keys$ = Rx.Observable
-                .merge(
-                    Rx.Observable.fromEvent(document, 'keydown').map(event => ( PADDLE_CONTROLS[event.key] || 0 )),
-                    //释放按键
-                    Rx.Observable.fromEvent(document, 'keyup').map(event => (0))
-                )
-                //对数据去重
-                .distinctUntilChanged();
+    //merge先到先得
+    .merge(
+        Rx.Observable.fromEvent(document, 'keydown').map(event => (PADDLE_CONTROLS[event.key] || 0)),
+        //释放按键
+        Rx.Observable.fromEvent(document, 'keyup').map(event => (0))
+    )
+    //对数据去重
+    .distinctUntilChanged();
+
+
+//判断球跟砖块是否碰撞
+function isCollision(brick, ball) {
+    return ball.position.x > brick.x &&
+        ball.position.x < brick.x + brick.width &&
+        ball.position.y > brick.y &&
+        ball.position.y < brick.y + brick.height
+}
 
 //结合时间流以及鼠标时间来控制球拍的位置
-time$.withLatestFrom(keys$).subscribe(value => {
-    nextPaddlePosation = nextPaddlePosation + value[0].deltaTime * PADDLE_SPEED * value[1];
-    context.clearRect(0, 0, stage.width, stage.height);
-    drawPaddle(nextPaddlePosation);
-    drawBall(initState().ball);
+time$.withLatestFrom(keys$).map(value => {
+    //更新球拍的位置数据
+    initState.paddle.position = initState.paddle.position + value[0].deltaTime * PADDLE_SPEED * value[1];
+    //检测球跟砖块的碰撞
+    initState.bricks.forEach((brick) => {
+        //删除碰撞到的砖块，并且使球专项
+        if (isCollision(brick, initState.ball)) {
+            let brickIndex = initState.bricks.indexOf(brick);
+            initState.bricks.splice(brickIndex, 1);
+            initState.ball.direction.y = -initState.ball.direction.y;
+        }
+        if (initState.ball.position.x > (stage.width - BALL_RADIUS)) {
+            initState.ball.direction.x = -1
+        }
+        if (initState.ball.position.x < BALL_RADIUS) {
+            initState.ball.direction.x = 1
+        }
+
+        if ((initState.ball.position.y > (stage.height - PADDLE_HEIGHT - BALL_RADIUS)) && (initState.ball.position.x > initState.paddle.position) && (initState.ball.position.x < initState.paddle.position + PADDLE_WIDTH)) {
+            initState.ball.direction.y = -1
+        }
+    })
+    //更新求的位置数据
+    initState.ball.position.x = initState.ball.position.x + value[0].deltaTime * BALL_SPEED * initState.ball.direction.x;
+    initState.ball.position.y = initState.ball.position.y + value[0].deltaTime * BALL_SPEED * initState.ball.direction.y;
+}).subscribe(() => {
+    updateView(initState);
 });
 
-
-const initState = () => ({
-    ball: {
-        position : {
-            x: stage.width / 2,
-            y: stage.height - PADDLE_HEIGHT - BALL_RADIUS
-        }
-    }
-})
-
-
-// drawBall(initState().ball)
-
+function updateView(state) {
+    context.clearRect(0, 0, stage.width, stage.height);
+    drawPaddle(state.paddle.position);
+    drawBall(state.ball);
+    drawDricks(state.bricks);
+}
+updateView(initState);
 
 
 let umdConfig = Object.assign({}, getCommonConfig(), {
